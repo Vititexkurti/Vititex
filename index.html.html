@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Kurti Stock Manager — Sizes + Logs + Monthly Sales</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root{
+    --primary:#6a11cb;
+    --primary-2:#2575fc;
+    --ok:#2ecc71;
+    --warn:#f39c12;
+    --danger:#e74c3c;
+    --ink:#2c3e50;
+    --bg:#f5f7fb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink)}
+  header{
+    padding:16px 20px;color:#fff;
+    background:linear-gradient(90deg,var(--primary),var(--primary-2));
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px
+  }
+  header h1{margin:0;font-size:20px;font-weight:700}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap}
+  .tabs button{
+    border:0;border-radius:999px;padding:8px 14px;cursor:pointer;font-weight:600;
+    background:#ffffff22;color:#fff;backdrop-filter:blur(4px)
+  }
+  .tabs button.active{background:#fff;color:var(--primary)}
+  .container{max-width:1200px;margin:20px auto;padding:0 16px}
+  .card{background:#fff;border-radius:14px;box-shadow:0 6px 18px rgba(0,0,0,.08);padding:16px}
+  .grid{display:grid;gap:16px}
+  @media(min-width:1000px){.grid.cols-4{grid-template-columns:repeat(4,1fr)}.grid.cols-3{grid-template-columns:repeat(3,1fr)}.grid.cols-2{grid-template-columns:repeat(2,1fr)}}
+  label{font-size:12px;font-weight:700;opacity:.8;display:block;margin-top:8px}
+  input,select,button{padding:10px;border-radius:10px;border:1px solid #e3e6ef}
+  input:focus,select:focus{outline:none;border-color:var(--primary)}
+  .btn{border:0;cursor:pointer;font-weight:700}
+  .btn.primary{background:var(--primary);color:#fff}
+  .btn.ok{background:var(--ok);color:#fff}
+  .btn.warn{background:var(--warn);color:#fff}
+  .btn.danger{background:var(--danger);color:#fff}
+  .btn.ghost{background:#f1f3f7}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  table{width:100%;border-collapse:separate;border-spacing:0;overflow:auto;border-radius:12px}
+  thead th{background:#eef3ff;color:#334;position:sticky;top:0;z-index:1}
+  th,td{border-bottom:1px solid #eef1f6;padding:10px;text-align:center}
+  tbody tr:nth-child(even){background:#fafbff}
+  tbody tr:hover{background:#f2f6ff}
+  .pill{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;background:#eef;min-width:36px}
+  .low{background:#e74c3c;color:#fff;font-weight:700}
+  .totals{background:#fff6d6;font-weight:800}
+  .muted{opacity:.7}
+  .search{width:100%}
+  .hidden{display:none}
+  .nowrap{white-space:nowrap}
+  .table-wrap{overflow:auto}
+  .subtle{font-size:12px;opacity:.75}
+</style>
+</head>
+<body>
+<header>
+  <h1>👗 Kurti Stock Manager</h1>
+  <div class="tabs">
+    <button class="active" data-tab="dashboard">📊 Dashboard</button>
+    <button data-tab="add">➕ Add Item</button>
+    <button data-tab="purchase">📦 Purchase</button>
+    <button data-tab="sale">🛍️ Sale</button>
+    <button data-tab="return">↩️ Return</button>
+    <button data-tab="log">📜 Transactions Log</button>
+    <button data-tab="msales">📅 Monthly Sales</button>
+    <button data-tab="settings">⚙️ Settings</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Dashboard -->
+  <section class="card" id="dashboard">
+    <div class="row" style="justify-content:space-between;gap:12px;margin-bottom:12px">
+      <input id="search" class="search" placeholder="🔎 Search items..." />
+      <div class="row">
+        <button class="btn ghost" id="btnExport">⬇️ Export CSV</button>
+        <input id="fileImport" type="file" accept=".csv" class="hidden"/>
+        <button class="btn ghost" id="btnImport">⬆️ Import CSV</button>
+      </div>
+    </div>
+
+    <div class="grid cols-4" style="margin-bottom:12px">
+      <div class="card" style="padding:12px">
+        <div class="muted">Total Items</div>
+        <div id="statItems" style="font-weight:800;font-size:20px">0</div>
+      </div>
+      <div class="card" style="padding:12px">
+        <div class="muted">Total Qty</div>
+        <div id="statQty" style="font-weight:800;font-size:20px">0</div>
+      </div>
+      <div class="card" style="padding:12px">
+        <div class="muted">Total Value (₹)</div>
+        <div id="statValue" style="font-weight:800;font-size:20px">0</div>
+      </div>
+      <div class="card" style="padding:12px">
+        <div class="muted">Low Stock (&lt;2)</div>
+        <div id="statLow" style="font-weight:800;font-size:20px">0</div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table id="tbl">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Rate (₹)</th>
+            <th>S</th><th>M</th><th>L</th><th>XL</th><th>XXL</th><th>XXXL</th>
+            <th>Total Qty</th>
+            <th>Total Value (₹)</th>
+            <th>Returns</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+        <tfoot>
+          <tr class="totals">
+            <td colspan="8" style="text-align:right">Grand Totals</td>
+            <td id="grandQty">0</td>
+            <td id="grandVal">₹0.00</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="row" style="justify-content:space-between">
+        <h3 style="margin:0">Rate-wise Summary</h3>
+        <span class="subtle">Groups items by rate and shows total qty/value</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Rate (₹)</th><th>Total Qty</th><th>Total Value (₹)</th></tr>
+          </thead>
+          <tbody id="rateSummaryBody"></tbody>
+          <tfoot>
+            <tr class="totals"><td style="text-align:right">Grand Total</td><td id="rsQty">0</td><td id="rsVal">₹0.00</td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Add Item -->
+  <section class="card hidden" id="add">
+    <h3 style="margin-top:0">➕ Add New Item (with Opening Stock)</h3>
+    <div class="grid cols-3">
+      <div>
+        <label>Item Name</label>
+        <input id="addName" placeholder="e.g. Cotton Kurti" />
+      </div>
+      <div>
+        <label>Rate (₹)</label>
+        <input id="addRate" type="number" min="0" step="0.01" placeholder="e.g. 799" />
+      </div>
+    </div>
+    <div class="grid cols-3">
+      <div><label>S</label><input id="os_S" type="number" min="0" value="0" /></div>
+      <div><label>M</label><input id="os_M" type="number" min="0" value="0" /></div>
+      <div><label>L</label><input id="os_L" type="number" min="0" value="0" /></div>
+      <div><label>XL</label><input id="os_XL" type="number" min="0" value="0" /></div>
+      <div><label>XXL</label><input id="os_XXL" type="number" min="0" value="0" /></div>
+      <div><label>XXXL</label><input id="os_XXXL" type="number" min="0" value="0" /></div>
+    </div>
+    <div class="row">
+      <label>Date</label>
+      <input id="addDate" type="date" />
+    </div>
+    <div class="row">
+      <button class="btn primary" id="btnAdd">Add Item</button>
+    </div>
+  </section>
+
+  <!-- Purchase -->
+  <section class="card hidden" id="purchase">
+    <h3 style="margin-top:0">📦 Purchase Stock</h3>
+    <div class="grid cols-3">
+      <div>
+        <label>Item</label>
+        <select id="pItem"></select>
+      </div>
+      <div>
+        <label>Size</label>
+        <select id="pSize">
+          <option>S</option><option>M</option><option>L</option>
+          <option>XL</option><option>XXL</option><option>XXXL</option>
+        </select>
+      </div>
+      <div>
+        <label>Qty</label>
+        <input id="pQty" type="number" min="1" />
+      </div>
+      <div>
+        <label>Date</label>
+        <input id="pDate" type="date" />
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn ok" id="btnPurchase">Add Purchase</button>
+    </div>
+  </section>
+
+  <!-- Sale -->
+  <section class="card hidden" id="sale">
+    <h3 style="margin-top:0">🛍️ Sale</h3>
+    <div class="grid cols-3">
+      <div>
+        <label>Item</label>
+        <select id="sItem"></select>
+      </div>
+      <div>
+        <label>Size</label>
+        <select id="sSize">
+          <option>S</option><option>M</option><option>L</option>
+          <option>XL</option><option>XXL</option><option>XXXL</option>
+        </select>
+      </div>
+      <div>
+        <label>Qty</label>
+        <input id="sQty" type="number" min="1" />
+      </div>
+      <div>
+        <label>Date</label>
+        <input id="sDate" type="date" />
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn warn" id="btnSale">Record Sale</button>
+    </div>
+  </section>
+
+  <!-- Return -->
+  <section class="card hidden" id="return">
+    <h3 style="margin-top:0">↩️ Return</h3>
+    <div class="grid cols-3">
+      <div>
+        <label>Item</label>
+        <select id="rItem"></select>
+      </div>
+      <div>
+        <label>Size</label>
+        <select id="rSize">
+          <option>S</option><option>M</option><option>L</option>
+          <option>XL</option><option>XXL</option><option>XXXL</option>
+        </select>
+      </div>
+      <div>
+        <label>Qty</label>
+        <input id="rQty" type="number" min="1" />
+      </div>
+      <div>
+        <label>Date</label>
+        <input id="rDate" type="date" />
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="btnReturn">Add Return</button>
+    </div>
+  </section>
+
+  <!-- Transactions Log -->
+  <section class="card hidden" id="log">
+    <div class="row" style="justify-content:space-between">
+      <h3 style="margin:0">📜 Transactions Log</h3>
+      <span class="subtle">Filter by date range & type</span>
+    </div>
+    <div class="row" style="margin:6px 0 12px">
+      <div>
+        <label>From</label>
+        <input id="logFrom" type="date" />
+      </div>
+      <div>
+        <label>To</label>
+        <input id="logTo" type="date" />
+      </div>
+      <div>
+        <label>Type</label>
+        <select id="logType">
+          <option value="">All</option>
+          <option value="opening">Opening</option>
+          <option value="purchase">Purchase</option>
+          <option value="sale">Sale</option>
+          <option value="return">Return</option>
+        </select>
+      </div>
+      <button class="btn ghost" id="btnLogClear">Clear Filters</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th><th>Type</th><th>Item</th><th>Size</th><th>Qty</th><th>Rate (₹)</th><th>Value (₹)</th>
+          </tr>
+        </thead>
+        <tbody id="logBody"></tbody>
+        <tfoot>
+          <tr class="totals">
+            <td colspan="4" style="text-align:right">Totals</td>
+            <td id="logQty">0</td>
+            <td>—</td>
+            <td id="logVal">₹0.00</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </section>
+
+  <!-- Monthly Sales -->
+  <section class="card hidden" id="msales">
+    <div class="row" style="justify-content:space-between">
+      <h3 style="margin:0">📅 Month-wise Sales Report</h3>
+      <span class="subtle">Based on Sale transactions</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Month</th><th>Total Qty Sold</th><th>Total Value (₹)</th></tr>
+        </thead>
+        <tbody id="msBody"></tbody>
+        <tfoot>
+          <tr class="totals"><td style="text-align:right">Grand Total</td><td id="msQty">0</td><td id="msVal">₹0.00</td></tr>
+        </tfoot>
+      </table>
+    </div>
+  </section>
+
+  <!-- Settings -->
+  <section class="card hidden" id="settings">
+    <h3 style="margin-top:0">⚙️ Settings</h3>
+    <div class="grid cols-2">
+      <div>
+        <label>Your WhatsApp Number (with country code, no +)</label>
+        <input id="waNumber" placeholder="e.g. 91XXXXXXXXXX" />
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="btnSaveSettings">Save Settings</button>
+      <span class="muted" id="settingsSaved" style="display:none">Saved ✓</span>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* ---------- Data Model ---------- */
+const sizes = ["S","M","L","XL","XXL","XXXL"];
+
+let store = {
+  items: [],   // {id,name,rate,stock:{S..}, returns:[{date,size,qty}], alertSeen:{S:false..}}
+  settings: {wa:""},
+  logs: []     // {id,date,type,itemId,itemName,size,qty,rate,value}
+};
+
+const LS_KEY = "kurtiStockV3";
+
+/* ---------- Utilities ---------- */
+const el = id => document.getElementById(id);
+const toNum = v => Number.isFinite(+v) ? +v : 0;
+const today = () => new Date().toISOString().slice(0,10);
+const fmtINR = n => "₹" + (Number(n)||0).toFixed(2);
+
+function save(){ localStorage.setItem(LS_KEY, JSON.stringify(store)); }
+function load(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw){
+      const data = JSON.parse(raw);
+      if(data.items) store.items = data.items;
+      if(data.settings) store.settings = data.settings;
+      if(data.logs) store.logs = data.logs;
+    }
+  }catch(e){}
+}
+load();
+
+/* ---------- Tabs ---------- */
+document.querySelectorAll(".tabs button").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));
+    document.querySelectorAll("section.card").forEach(s=>s.classList.add("hidden"));
+    btn.classList.add("active");
+    el(btn.dataset.tab).classList.remove("hidden");
+    if(btn.dataset.tab==="log") renderLog();
+    if(btn.dataset.tab==="msales") renderMonthlySales();
+  })
+});
+
+/* ---------- Add Item (Opening Stock per size) ---------- */
+el("addDate").value = today();
+el("btnAdd").addEventListener("click", ()=>{
+  const name = el("addName").value.trim();
+  const rate = parseFloat(el("addRate").value);
+  const od = el("addDate").value || today();
+  if(!name || isNaN(rate) || rate<0){ alert("Enter valid Name and Rate"); return; }
+
+  const stock = {};
+  sizes.forEach(sz=> stock[sz] = toNum(el(`os_${sz}`).value||0) );
+
+  const id = Date.now();
+  const item = { id, name, rate, stock, returns: [], alertSeen: Object.fromEntries(sizes.map(s=>[s,false])) };
+  store.items.push(item);
+
+  // opening logs per size >0
+  sizes.forEach(sz=>{
+    const q = stock[sz]||0;
+    if(q>0) pushLog({date:od,type:"opening",itemId:id,itemName:name,size:sz,qty:q,rate:rate});
+  });
+
+  save();
+  clearAddForm();
+  render();
+  alert("Item added with opening stock ✔");
+});
+function clearAddForm(){
+  el("addName").value=""; el("addRate").value="";
+  sizes.forEach(sz=> el(`os_${sz}`).value="0");
+  el("addDate").value=today();
+}
+
+/* ---------- Transactions Helpers ---------- */
+function pushLog({date,type,itemId,itemName,size,qty,rate}){
+  const value = (type==="sale" ? -1 : 1) * (qty * (rate||0));
+  store.logs.push({
+    id: Date.now()+Math.random(),
+    date: date || today(),
+    type, itemId, itemName, size, qty: (type==="sale" ? -Math.abs(qty) : Math.abs(qty)),
+    rate: rate||0, value
+  });
+}
+
+/* ---------- Purchase / Sale / Return ---------- */
+function refillItemDropdowns(){
+  const ids = ["pItem","sItem","rItem"];
+  ids.forEach(id=>{
+    const sel = el(id);
+    sel.innerHTML = "";
+    store.items.forEach(it=>{
+      const opt = document.createElement("option");
+      opt.value = it.id; opt.textContent = it.name;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+function getItemById(id){ return store.items.find(it=> it.id == id); }
+
+el("pDate").value = today();
+el("btnPurchase").addEventListener("click", ()=>{
+  const id = el("pItem").value;
+  const size = el("pSize").value;
+  const qty = toNum(el("pQty").value);
+  const date = el("pDate").value || today();
+  if(!id || !size || qty<=0) return alert("Select item/size and valid qty");
+  const it = getItemById(id);
+  it.stock[size] += qty;
+  pushLog({date,type:"purchase",itemId:it.id,itemName:it.name,size,qty,rate:it.rate});
+  save(); render();
+  el("pQty").value=""; el("pDate").value=today();
+});
+
+el("sDate").value = today();
+el("btnSale").addEventListener("click", ()=>{
+  const id = el("sItem").value;
+  const size = el("sSize").value;
+  const qty = toNum(el("sQty").value);
+  const date = el("sDate").value || today();
+  if(!id || !size || qty<=0) return alert("Select item/size and valid qty");
+  const it = getItemById(id);
+  if(it.stock[size] < qty) return alert("Not enough stock for sale");
+  it.stock[size] -= qty;
+  pushLog({date,type:"sale",itemId:it.id,itemName:it.name,size,qty,rate:it.rate});
+  save(); render();
+  el("sQty").value=""; el("sDate").value=today();
+});
+
+el("rDate").value = today();
+el("btnReturn").addEventListener("click", ()=>{
+  const id = el("rItem").value;
+  const size = el("rSize").value;
+  const qty = toNum(el("rQty").value);
+  const date = el("rDate").value || today();
+  if(!id || !size || qty<=0) return alert("Select item/size and valid qty");
+  const it = getItemById(id);
+  it.stock[size] += qty;
+  it.returns.push({date,size,qty});
+  pushLog({date,type:"return",itemId:it.id,itemName:it.name,size,qty,rate:it.rate});
+  save(); render();
+  el("rQty").value=""; el("rDate").value=today();
+});
+
+/* ---------- Delete Single Row (Item) ---------- */
+function deleteItem(id){
+  if(!confirm("Delete this item?")) return;
+  store.items = store.items.filter(it=> it.id !== id);
+  // Keep logs as history (do not delete), or uncomment next line to purge this item's logs:
+  // store.logs = store.logs.filter(l=> l.itemId !== id);
+  save(); render();
+}
+
+/* ---------- Search ---------- */
+el("search").addEventListener("input", ()=> render());
+
+/* ---------- CSV Export / Import (Items) ---------- */
+el("btnExport").addEventListener("click", ()=>{
+  const header = ["Item","Rate","S","M","L","XL","XXL","XXXL"];
+  let csv = header.join(",") + "\n";
+  store.items.forEach(it=>{
+    csv += [
+      escapeCsv(it.name), it.rate,
+      it.stock.S||0, it.stock.M||0, it.stock.L||0, it.stock.XL||0, it.stock.XXL||0, it.stock.XXXL||0
+    ].join(",") + "\n";
+  });
+  const blob = new Blob([csv], {type:"text/csv"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "kurti_stock_backup.csv";
+  a.click();
+});
+function escapeCsv(s){ return String(s).includes(",") ? `"${String(s).replace(/"/g,'""')}"` : s; }
+
+el("btnImport").addEventListener("click", ()=> el("fileImport").click());
+el("fileImport").addEventListener("change", (ev)=>{
+  const file = ev.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const lines = e.target.result.split(/\r?\n/).filter(x=>x.trim()!=="");
+    const head = lines.shift();
+    const cols = head.split(",").map(s=>s.trim());
+    const needed = ["Item","Rate","S","M","L","XL","XXL","XXXL"];
+    const ok = needed.every((c,i)=> (cols[i]||"").toUpperCase() === c.toUpperCase());
+    if(!ok){ alert("CSV header must be: " + needed.join(",")); return; }
+    const items = [];
+    lines.forEach(line=>{
+      const parts = parseCsvLine(line, cols.length);
+      if(!parts) return;
+      const [name, rate, s,m,l,xl,xxl,xxxl] = parts;
+      const item = {
+        id: Date.now() + Math.random(),
+        name: (name||"").trim(),
+        rate: parseFloat(rate)||0,
+        stock: {
+          S: toNum(s), M: toNum(m), L: toNum(l),
+          XL: toNum(xl), XXL: toNum(xxl), XXXL: toNum(xxxl)
+        },
+        returns: [],
+        alertSeen: Object.fromEntries(sizes.map(sz=>[sz,false]))
+      };
+      if(item.name) items.push(item);
+    });
+    store.items = items;
+    save(); render();
+  };
+  reader.readAsText(file);
+  ev.target.value = ""; // reset
+});
+function parseCsvLine(line, expected){
+  // Simple CSV parser supporting quotes
+  const out=[]; let cur=""; let inQ=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(inQ){
+      if(ch==='"'){
+        if(line[i+1]==='"'){ cur+='"'; i++; }
+        else inQ=false;
+      }else cur+=ch;
+    }else{
+      if(ch==='"') inQ=true;
+      else if(ch===','){ out.push(cur); cur=""; }
+      else cur+=ch;
+    }
+  }
+  out.push(cur);
+  if(out.length!==expected) return null;
+  return out;
+}
+
+/* ---------- WhatsApp Low Stock Alert (per size, once per low period) ---------- */
+function checkLowStockAndAlert(){
+  const wa = store.settings.wa?.trim();
+  let lowCount = 0;
+  store.items.forEach(it=>{
+    sizes.forEach(sz=>{
+      const q = it.stock[sz]||0;
+      if(q < 2){
+        lowCount++;
+        if(!it.alertSeen[sz]){
+          it.alertSeen[sz] = true;
+          if(wa){
+            const msg = `Low Stock Alert: ${it.name} size ${sz} has only ${q} left!`;
+            const url = `https://wa.me/${encodeURIComponent(wa)}?text=${encodeURIComponent(msg)}`;
+            window.open(url,"_blank");
+          }else{
+            alert(`⚠ Low Stock: ${it.name} (${sz}) = ${q}`);
+          }
+        }
+      }else{
+        // reset the alert latch if stock recovered
+        it.alertSeen[sz] = false;
+      }
+    });
+  });
+  return lowCount;
+}
+
+/* ---------- Settings ---------- */
+el("waNumber").value = store.settings.wa || "";
+el("btnSaveSettings").addEventListener("click", ()=>{
+  store.settings.wa = el("waNumber").value.trim();
+  save();
+  el("settingsSaved").style.display="inline";
+  setTimeout(()=> el("settingsSaved").style.display="none", 1500);
+});
+
+/* ---------- Render (Dashboard) ---------- */
+function render(){
+  // refresh dropdowns
+  refillItemDropdowns();
+
+  const q = el("search").value?.toLowerCase().trim() || "";
+  const tb = el("tbody");
+  tb.innerHTML = "";
+
+  let grandQty = 0, grandVal = 0;
+
+  store.items
+    .filter(it => it.name.toLowerCase().includes(q))
+    .forEach(it=>{
+      const row = document.createElement("tr");
+
+      const totalQty = sizes.reduce((a,s)=> a + (it.stock[s]||0), 0);
+      const totalVal = totalQty * (it.rate||0);
+      grandQty += totalQty; grandVal += totalVal;
+
+      const returnsTotal = it.returns.reduce((a,r)=> a + (r.qty||0), 0);
+
+      // build cells
+      const nameTd = `<td class="nowrap">${it.name}</td>`;
+      const rateTd = `<td><b>₹${Number(it.rate||0).toFixed(2)}</b></td>`;
+      const sizeTds = sizes.map(sz=>{
+        const q = it.stock[sz]||0;
+        const cls = q<2 ? 'pill low' : 'pill';
+        return `<td><span class="${cls}">${q}</span></td>`;
+      }).join("");
+      const totalQtyTd = `<td><b>${totalQty}</b></td>`;
+      const totalValTd = `<td><b>${fmtINR(totalVal)}</b></td>`;
+      const returnsTd = `<td><button class="btn ghost" onclick="viewReturns(${it.id})">View (${returnsTotal})</button></td>`;
+      const actionsTd = `<td><button class="btn danger" onclick="deleteItem(${it.id})">Delete</button></td>`;
+
+      row.innerHTML = nameTd + rateTd + sizeTds + totalQtyTd + totalValTd + returnsTd + actionsTd;
+      tb.appendChild(row);
+    });
+
+  // stats + grand totals
+  el("statItems").textContent = store.items.length;
+  el("statQty").textContent = grandQty;
+  el("statValue").textContent = grandVal.toFixed(2);
+  el("grandQty").textContent = grandQty;
+  el("grandVal").textContent = fmtINR(grandVal);
+
+  // rate-wise summary
+  renderRateSummary();
+
+  // low stock check (after rendering)
+  const lowCount = checkLowStockAndAlert();
+  el("statLow").textContent = lowCount;
+
+  save();
+}
+
+/* ---------- Rate-wise Summary ---------- */
+function renderRateSummary(){
+  const map = new Map();
+  let sumQty=0, sumVal=0;
+  store.items.forEach(it=>{
+    const rate = Number(it.rate||0).toFixed(2);
+    const qty = sizes.reduce((a,s)=> a+(it.stock[s]||0),0);
+    if(!map.has(rate)) map.set(rate,{qty:0});
+    map.get(rate).qty += qty;
+  });
+  const body = el("rateSummaryBody");
+  body.innerHTML = "";
+  [...map.entries()]
+    .sort((a,b)=> Number(a[0]) - Number(b[0]))
+    .forEach(([rate,{qty}])=>{
+      const val = qty * Number(rate);
+      sumQty += qty; sumVal += val;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>₹${rate}</td><td>${qty}</td><td>${fmtINR(val)}</td>`;
+      body.appendChild(tr);
+    });
+  el("rsQty").textContent = sumQty;
+  el("rsVal").textContent = fmtINR(sumVal);
+}
+
+/* ---------- Returns History Viewer ---------- */
+function viewReturns(id){
+  const it = getItemById(id);
+  if(!it) return;
+  if(!it.returns.length){ alert("No returns recorded for " + it.name); return; }
+  const lines = it.returns
+    .map(r => `${r.date || "(no date)"}  |  ${r.size}  |  ${r.qty}`)
+    .join("\n");
+  alert(`Returns for ${it.name}\nDate | Size | Qty\n----------------------\n${lines}`);
+}
+
+/* ---------- Transactions Log Rendering ---------- */
+function renderLog(){
+  const from = el("logFrom").value ? new Date(el("logFrom").value) : null;
+  const to   = el("logTo").value   ? new Date(el("logTo").value)   : null;
+  const type = el("logType").value;
+
+  const body = el("logBody");
+  body.innerHTML = "";
+
+  let tQty = 0, tVal = 0;
+
+  store.logs
+    .filter(l => !type || l.type===type)
+    .filter(l => {
+      if(!from && !to) return true;
+      const d = new Date(l.date);
+      if(from && d < new Date(from.toDateString())) return false;
+      if(to && d > new Date(to.toDateString())) return false;
+      return true;
+    })
+    .sort((a,b)=> new Date(a.date) - new Date(b.date))
+    .forEach(l=>{
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${l.date}</td><td>${cap(l.type)}</td><td>${l.itemName}</td><td>${l.size}</td><td>${l.qty}</td><td>${fmtINR(l.rate)}</td><td>${fmtINR(l.value)}</td>`;
+      body.appendChild(tr);
+      tQty += l.qty;
+      tVal += l.value;
+    });
+
+  el("logQty").textContent = tQty;
+  el("logVal").textContent = fmtINR(tVal);
+}
+
+function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+
+el("logFrom").addEventListener("change", renderLog);
+el("logTo").addEventListener("change", renderLog);
+el("logType").addEventListener("change", renderLog);
+el("btnLogClear").addEventListener("click", ()=>{
+  el("logFrom").value=""; el("logTo").value=""; el("logType").value="";
+  renderLog();
+});
+
+/* ---------- Monthly Sales Rendering ---------- */
+function renderMonthlySales(){
+  const body = el("msBody");
+  body.innerHTML = "";
+  const map = new Map(); // key: YYYY-MM -> {qty,val}
+  store.logs
+    .filter(l=> l.type==="sale")
+    .forEach(l=>{
+      const key = (l.date || today()).slice(0,7); // YYYY-MM
+      if(!map.has(key)) map.set(key,{qty:0,val:0});
+      const entry = map.get(key);
+      entry.qty += Math.abs(l.qty);
+      entry.val += Math.abs(l.value);
+    });
+
+  let gQty=0,gVal=0;
+  [...map.entries()].sort((a,b)=> a[0].localeCompare(b[0])).forEach(([ym,{qty,val}])=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${formatMonth(ym)}</td><td>${qty}</td><td>${fmtINR(val)}</td>`;
+    body.appendChild(tr);
+    gQty += qty; gVal += val;
+  });
+  el("msQty").textContent = gQty;
+  el("msVal").textContent = fmtINR(gVal);
+}
+function formatMonth(ym){
+  const [y,m] = ym.split("-").map(n=>+n);
+  return new Date(y,m-1,1).toLocaleString(undefined,{month:"short",year:"numeric"});
+}
+
+/* ---------- Init ---------- */
+(function init(){
+  // default date fields to today
+  ["pDate","sDate","rDate","addDate"].forEach(id=> { const x=el(id); if(x && !x.value) x.value = today(); });
+
+  // wire globals for inline handlers
+  window.deleteItem = deleteItem;
+  window.viewReturns = viewReturns;
+
+  // Fill dropdowns and render
+  render();
+
+  // Tab changes to log or monthly will re-render their tables automatically
+})();
+</script>
+</body>
+</html>
